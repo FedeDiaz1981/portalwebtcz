@@ -1,0 +1,620 @@
+---
+import "../../../styles/global.css";
+import { getCurrentPortalClient } from "../../../lib/portal/client-access";
+
+const user = Astro.locals.user;
+const supabase = Astro.locals.supabase;
+
+if (!user || !supabase) {
+  return Astro.redirect("/login");
+}
+
+const currentClient = await getCurrentPortalClient(supabase, user.id);
+const clientName = currentClient?.name ?? "Cliente";
+const clientLogoUrl = currentClient?.logoUrl ?? "";
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiempo de Empleado | Technized Clientes</title>
+    <meta
+      name="description"
+      content="Aplicacion privada para procesar presencias y ausencias de empleados."
+    />
+    <link rel="icon" href="/favicon.png" />
+    <script is:inline src="https://cdn.tailwindcss.com"></script>
+    <script is:inline>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"Futura Md BT"', '"Futura"', '"Trebuchet MS"', "sans-serif"] },
+            colors: {
+              brand: {
+                navy: "#120d1a",
+                blue: "#2b1536",
+                cyan: "#46558A",
+                gold: "#EF7C0E"
+              }
+            }
+          }
+        }
+      };
+    </script>
+    <script is:inline src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script is:inline src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script is:inline src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script is:inline src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family: "Futura Md BT", "Futura", "Trebuchet MS", sans-serif;
+        background-color: var(--surface-dark);
+      }
+
+      .portal-app-shell {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background:
+          radial-gradient(circle at top right, rgba(239, 124, 14, 0.14), transparent 26%),
+          radial-gradient(circle at top left, rgba(118, 54, 140, 0.16), transparent 24%),
+          linear-gradient(180deg, var(--surface-dark) 0%, #09070d 100%);
+      }
+
+      .portal-app-header {
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 11, 22, 0.9);
+        backdrop-filter: blur(12px);
+      }
+
+      .portal-app-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 0.7rem 1rem;
+        color: rgba(255, 255, 255, 0.88);
+        text-decoration: none;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+      }
+
+      .portal-app-back:hover {
+        border-color: rgba(239, 124, 14, 0.62);
+        background: rgba(239, 124, 14, 0.1);
+      }
+
+      .portal-app-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 0.9rem;
+      }
+
+      #employee-time-root {
+        height: calc(100vh - 72px);
+      }
+
+      .time-adjust-page,
+      .bg-main,
+      .overlay {
+        height: 100%;
+        width: 100%;
+      }
+
+      .time-adjust-page {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .bg-main {
+        background-image: url("/assets/brand/page10_img02.png");
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -1;
+        transform: scale(1.02);
+      }
+
+      .overlay {
+        background: linear-gradient(145deg, rgba(18, 13, 26, 0.9) 0%, rgba(9, 7, 13, 0.96) 100%);
+        display: flex;
+        flex-direction: column;
+        padding: 0.75rem 2rem;
+        backdrop-filter: blur(2px);
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+      }
+
+      .terminal-inner {
+        background: rgba(14, 11, 20, 0.72);
+        border: 1px solid rgba(239, 124, 14, 0.22);
+      }
+
+      .terminal-scroll::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .terminal-scroll::-webkit-scrollbar-thumb {
+        background: rgba(239, 124, 14, 0.4);
+        border-radius: 10px;
+      }
+
+      .text-glow {
+        text-shadow: 0 0 15px rgba(239, 124, 14, 0.35);
+      }
+
+      .fade-in {
+        animation: fadeIn 0.6s ease-out forwards;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 1024px) {
+        html,
+        body {
+          overflow: auto;
+        }
+
+        .portal-app-shell {
+          min-height: 100vh;
+          height: auto;
+        }
+
+        .portal-app-header {
+          height: auto;
+          align-items: flex-start;
+          flex-direction: column;
+          padding: 1rem;
+        }
+
+        #employee-time-root {
+          height: auto;
+          min-height: calc(100vh - 96px);
+        }
+
+        .overlay {
+          padding: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="portal-app-shell">
+      <header class="portal-app-header">
+        <a class="portal-app-back" href="/clientes/aplicaciones">
+          <span>←</span>
+          <span>Volver a aplicaciones</span>
+        </a>
+
+        <div class="portal-app-meta">
+          <strong style="color: rgba(255,255,255,0.92);">Tiempo de Empleado</strong>
+          <span>{user.email ?? ""}</span>
+        </div>
+      </header>
+
+      <div
+        id="portal-client-brand"
+        data-client-name={clientName}
+        data-client-logo-url={clientLogoUrl}
+        hidden
+      ></div>
+
+      <div id="employee-time-root"></div>
+    </div>
+
+    <script is:inline type="text/babel">
+      const { useEffect, useRef, useState } = React;
+      const clientBrandNode = document.getElementById("portal-client-brand");
+      const clientBrand = {
+        name: clientBrandNode?.dataset.clientName || "Cliente",
+        logoUrl: clientBrandNode?.dataset.clientLogoUrl || ""
+      };
+
+      const Icon = ({ name, className }) => {
+        const icons = {
+          upload: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>,
+          file: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>,
+          monitor: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>,
+          loader: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>,
+          download: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
+          users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+          layers: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>,
+          check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        };
+
+        return <span className={`inline-block ${className}`}>{icons[name] || null}</span>;
+      };
+
+      const parseDateToSafeLocal = (value) => {
+        if (!value) return null;
+        const cleanValue = value.trim().split(" ")[0];
+        const parts = cleanValue.split("/");
+        if (parts.length !== 3) return null;
+        return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), 0, 0, 0);
+      };
+
+      const formatDate = (date) => {
+        const day = date.getDate().toString().padStart(2, "0");
+        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+
+      function App() {
+        const [file, setFile] = useState(null);
+        const [logs, setLogs] = useState([]);
+        const [progress, setProgress] = useState(0);
+        const [processedData, setProcessedData] = useState(null);
+        const [isProcessing, setIsProcessing] = useState(false);
+        const [metrics, setMetrics] = useState({
+          original: 0,
+          adjusted: 0,
+          total: 0,
+          employees: 0
+        });
+        const logEndRef = useRef(null);
+
+        const addLog = (message, type = "info") => {
+          const timestamp = new Date().toLocaleTimeString();
+          setLogs((previous) => [...previous, { timestamp, message, type }]);
+        };
+
+        useEffect(() => {
+          logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, [logs]);
+
+        const runProcess = async (selectedFile) => {
+          setIsProcessing(true);
+          setProcessedData(null);
+          setLogs([]);
+          setMetrics({ original: 0, adjusted: 0, total: 0, employees: 0 });
+          setProgress(10);
+          addLog(`Iniciando reconversion operativa: ${selectedFile.name}`);
+
+          try {
+            const text = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (event) => resolve(event.target.result);
+              reader.onerror = () => reject(new Error("Error al leer el archivo."));
+              reader.readAsText(selectedFile, "UTF-8");
+            });
+
+            const lines = text.split(/\r?\n/);
+            if (!lines.length) return;
+
+            const headers = lines[0].split(",").map((header) => header.replace(/^"|"$/g, "").trim());
+
+            if (!headers.includes("Fecha Inicio") || !headers.includes("Fecha Fin")) {
+              throw new Error("Columnas Fecha Inicio/Fin no detectadas.");
+            }
+
+            setProgress(40);
+            addLog("Base de datos cargada correctamente.");
+
+            const rows = [];
+
+            for (let index = 1; index < lines.length; index += 1) {
+              if (!lines[index].trim()) continue;
+              const rowData = [];
+              const matches = lines[index].matchAll(/(?:^|,)(?:"([^"]*)"|([^,]*))/g);
+
+              for (const match of matches) {
+                rowData.push(match[1] || match[2] || "");
+              }
+
+              const rowObject = {};
+              headers.forEach((header, headerIndex) => {
+                rowObject[header] = rowData[headerIndex];
+              });
+              rows.push(rowObject);
+            }
+
+            const expanded = [];
+            let adjustedCount = 0;
+            const employeeSet = new Set();
+
+            rows.forEach((row) => {
+              const start = parseDateToSafeLocal(row["Fecha Inicio"]);
+              const end = parseDateToSafeLocal(row["Fecha Fin"]);
+
+              if (row["ID de usuario"]) {
+                employeeSet.add(row["ID de usuario"]);
+              }
+
+              if (!start || !end) {
+                const cleanStart = row["Fecha Inicio"] ? row["Fecha Inicio"].trim().split(" ")[0] : "";
+                expanded.push({ ...row, "Fecha del Registro": cleanStart });
+                return;
+              }
+
+              if (row["Fecha Inicio"] !== row["Fecha Fin"]) {
+                adjustedCount += 1;
+              }
+
+              const current = new Date(start);
+
+              while (current.getTime() <= end.getTime()) {
+                expanded.push({ ...row, "Fecha del Registro": formatDate(current) });
+                current.setDate(current.getDate() + 1);
+
+                if (expanded.length > 500000) {
+                  break;
+                }
+              }
+            });
+
+            setProgress(90);
+            setMetrics({
+              original: rows.length,
+              adjusted: adjustedCount,
+              total: expanded.length,
+              employees: employeeSet.size
+            });
+            setProcessedData({ headers: [...headers, "Fecha del Registro"], data: expanded });
+            addLog(`Expansion completada: ${expanded.length} registros.`, "success");
+            setProgress(100);
+          } catch (error) {
+            addLog(`ERROR: ${error.message}`, "error");
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+
+        const download = () => {
+          if (!processedData) return;
+
+          addLog("Exportando XLSX con formato dd/mm/yyyy...", "info");
+          const dateColumnName = "Fecha del Registro";
+          const dateColumnIndex = processedData.headers.indexOf(dateColumnName);
+          const EXCEL_EPOCH = new Date(Date.UTC(1899, 11, 30));
+
+          const aoa = [
+            processedData.headers,
+            ...processedData.data.map((row) =>
+              processedData.headers.map((header, index) => {
+                const value = row[header];
+
+                if (index === dateColumnIndex && value) {
+                  const date = parseDateToSafeLocal(value);
+                  if (date) {
+                    const utcTime = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+                    return (utcTime - EXCEL_EPOCH.getTime()) / (24 * 60 * 60 * 1000);
+                  }
+                }
+
+                return value === null || value === undefined ? "" : String(value);
+              })
+            )
+          ];
+
+          const workbook = XLSX.utils.book_new();
+          const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+          if (dateColumnIndex !== -1) {
+            const range = XLSX.utils.decode_range(worksheet["!ref"]);
+
+            for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
+              const cellRef = XLSX.utils.encode_cell({ c: dateColumnIndex, r: row });
+              if (worksheet[cellRef]) {
+                worksheet[cellRef].t = "n";
+                worksheet[cellRef].z = "dd/mm/yyyy";
+              }
+            }
+          }
+
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Reconversion_Technized");
+          XLSX.writeFile(workbook, `REFACT_DIARIO_${Date.now()}.xlsx`);
+          addLog("Descarga finalizada correctamente.", "success");
+        };
+
+        const summaryCards = [
+          { label: "Registros Leidos", value: metrics.original, icon: "file" },
+          { label: "Registros Ajustados", value: metrics.adjusted, icon: "layers" },
+          { label: "Cantidad Total", value: metrics.total, icon: "check" },
+          { label: "Empleados", value: metrics.employees, icon: "users" }
+        ];
+
+        return (
+          <div className="time-adjust-page h-full w-full">
+            <div className="bg-main"></div>
+            <div className="overlay">
+              <header className="mb-2 shrink-0">
+                <div className="mx-auto mb-2 flex w-full max-w-[98%] items-center justify-end px-2">
+                  <div className="flex min-w-[200px] items-center justify-center rounded-xl border border-white/20 bg-white/10 p-2 shadow-lg backdrop-blur">
+                    {clientBrand.logoUrl ? (
+                      <img
+                        src={clientBrand.logoUrl}
+                        alt={clientBrand.name}
+                        className="h-10 object-contain"
+                      />
+                    ) : (
+                      <span className="px-3 text-xs font-bold uppercase tracking-[0.3em] text-white/80">
+                        {clientBrand.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <h2 className="mb-0 text-lg font-black uppercase leading-none tracking-[0.6em] text-brand-gold drop-shadow-2xl text-glow">
+                    BIENVENIDO
+                  </h2>
+                  <h1 className="mb-2 text-2xl font-extrabold uppercase tracking-tight text-white text-glow">
+                    Tiempo de Empleado: Presencias / Ausencias
+                  </h1>
+                  <div className="mx-auto h-1 w-full max-w-[700px] rounded-full bg-gradient-to-r from-transparent via-brand-gold to-transparent opacity-75"></div>
+                </div>
+              </header>
+
+              <section className="mx-auto mb-3 grid w-full max-w-[98%] shrink-0 grid-cols-4 gap-3">
+                {summaryCards.map((card) => (
+                  <div key={card.label} className="glass-card flex flex-col justify-center rounded-2xl border-l-4 border-l-brand-gold/60 p-2">
+                    <div className="mb-0.5 flex items-center gap-2">
+                      <div className="rounded-lg border border-white/5 bg-brand-navy/60 p-1 shadow-inner">
+                        <Icon name={card.icon} className="h-3.5 w-3.5 text-brand-gold" />
+                      </div>
+                      <span className="text-[10px] font-bold leading-none tracking-wide text-white">
+                        {card.label}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-lg font-black leading-none text-white">
+                      {card.value.toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <main className="mx-auto mb-2 grid min-h-0 w-full max-w-[98%] flex-1 grid-cols-12 items-stretch gap-4">
+                <div className="col-span-4 h-full">
+                  <div className="glass-card flex h-full flex-col rounded-[1.5rem] p-4">
+                    <div className="mb-3 flex shrink-0 items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-gold">
+                      <Icon name="upload" className="h-3.5 w-3.5" />
+                      <span>Portal de Carga</span>
+                    </div>
+
+                    <div
+                      className={`group flex flex-1 cursor-pointer flex-col justify-center rounded-[1rem] border-2 border-dashed p-3 text-center transition-all ${
+                        file
+                          ? "border-brand-gold bg-brand-navy/30"
+                          : "border-white/20 hover:border-brand-cyan hover:bg-brand-navy/20"
+                      }`}
+                      onClick={() => document.getElementById("file-upload").click()}
+                    >
+                      <input
+                        type="file"
+                        id="file-upload"
+                        className="hidden"
+                        accept=".csv"
+                        onChange={(event) => {
+                          const nextFile = event.target.files?.[0];
+                          if (nextFile) {
+                            setFile(nextFile);
+                            runProcess(nextFile);
+                          }
+                        }}
+                      />
+
+                      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 bg-brand-navy/60 shadow-inner transition-transform group-hover:scale-110">
+                        {isProcessing ? (
+                          <Icon name="loader" className="h-5 w-5 text-brand-gold" />
+                        ) : (
+                          <Icon name="file" className="h-5 w-5 text-brand-gold/60" />
+                        )}
+                      </div>
+
+                      <p className="max-w-full truncate px-2 text-[11px] font-bold text-white">
+                        {file ? file.name : "Subir CSV"}
+                      </p>
+                    </div>
+
+                    {processedData && (
+                      <button
+                        onClick={download}
+                        className="mt-3 flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-gradient-to-r from-brand-blue via-[#3b1c49] to-brand-gold py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-2xl transition-all active:scale-95 [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]"
+                      >
+                        <Icon name="download" className="h-3.5 w-3.5" />
+                        Descargar Excel
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="col-span-8 h-full">
+                  <div className="glass-card flex h-full flex-col overflow-hidden rounded-[1.5rem] p-4">
+                    <div className="mb-3 flex shrink-0 items-center justify-between">
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white">
+                        <Icon name="monitor" className="h-3.5 w-3.5 text-brand-gold" />
+                        <span>Terminal de Monitoreo</span>
+                      </div>
+                      {progress > 0 && (
+                        <span className="font-mono text-[10px] font-bold text-brand-gold">{progress}%</span>
+                      )}
+                    </div>
+
+                    <div className="terminal-inner terminal-scroll flex-1 overflow-y-auto rounded-xl p-3 font-mono text-[11px] leading-relaxed">
+                      {logs.length === 0 ? (
+                        <div className="flex h-full flex-col items-center justify-center opacity-20">
+                          <Icon name="monitor" className="mb-2 h-8 w-8 text-brand-gold" />
+                          <p className="text-[8px] font-black uppercase tracking-[0.5em] text-white">
+                            Esperando dataset...
+                          </p>
+                        </div>
+                      ) : (
+                        logs.map((log, index) => (
+                          <div key={`${log.timestamp}-${index}`} className="fade-in mb-0.5 flex gap-3">
+                            <span className="shrink-0 text-slate-500">[{log.timestamp}]</span>
+                            <span
+                              className={
+                                log.type === "error"
+                                  ? "font-bold text-red-400"
+                                  : log.type === "success"
+                                    ? "font-bold text-emerald-400"
+                                    : "text-brand-gold/90"
+                              }
+                            >
+                              {log.type === "error"
+                                ? "x "
+                                : log.type === "success"
+                                  ? "ok "
+                                  : "> "}
+                              {log.message}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                      <div ref={logEndRef}></div>
+                    </div>
+                  </div>
+                </div>
+              </main>
+
+              <footer className="flex shrink-0 items-center justify-end border-t border-white/10 px-2 pt-2 text-[9px] font-bold uppercase tracking-[0.3em] text-white/40">
+
+                <div className="flex items-center gap-3 rounded-full border border-white/5 bg-white/5 px-3 py-1">
+                  <div className="h-1.5 w-1.5 animate-pulse bg-brand-gold shadow-[0_0_8px_#EF7C0E]"></div>
+                  <span className="text-white/60">Sistema operativo ready</span>
+                </div>
+              </footer>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("employee-time-root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>

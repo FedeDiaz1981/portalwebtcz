@@ -1,0 +1,75 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+const {
+  title = "Portal Clientes",
+  description = "Portal privado de clientes",
+  userEmail = "",
+  activePath = "/clientes/aplicaciones",
+  clientName = "",
+  clientLogoUrl = ""
+} = Astro.props;
+
+const navItems = [{ href: "/clientes/aplicaciones", label: "Aplicaciones" }];
+---
+
+<BaseLayout title={title} description={description}>
+  <section class="portal-shell">
+    <header class="portal-header">
+      <div class="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="portal-eyebrow text-xs">Area privada</p>
+          <h1 class="text-3xl font-semibold">Portal de aplicaciones</h1>
+        </div>
+
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center">
+          <nav class="flex flex-wrap gap-2">
+            {navItems.map((item) => {
+              const isActive = activePath === item.href;
+
+              return (
+                <a
+                  href={item.href}
+                  class:list={[
+                    "portal-nav-link rounded-full px-4 py-2 text-sm font-medium",
+                    isActive && "is-active"
+                  ]}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
+          </nav>
+
+          <div class="flex items-center gap-3">
+            {clientLogoUrl ? (
+              <div class="portal-brand-box flex items-center justify-center rounded-2xl px-4 py-2">
+                <img
+                  src={clientLogoUrl}
+                  alt={clientName || "Logo del cliente"}
+                  class="max-h-10 w-auto object-contain"
+                />
+              </div>
+            ) : clientName ? (
+              <div class="portal-brand-box rounded-2xl px-4 py-3 text-sm font-medium text-white/85">
+                {clientName}
+              </div>
+            ) : null}
+
+            <p class="portal-email">{userEmail}</p>
+            <a
+              href="/api/auth/logout"
+              class="portal-logout rounded-full px-4 py-2 text-sm font-medium"
+            >
+              Cerrar sesion
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="portal-main">
+      <slot />
+    </main>
+  </section>
+</BaseLayout>

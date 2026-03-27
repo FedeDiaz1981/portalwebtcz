@@ -1,0 +1,69 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const error = Astro.url.searchParams.get("error");
+---
+
+<BaseLayout title="Login Clientes | Technized" description="Acceso privado para clientes Technized.">
+  <section class="portal-shell">
+    <div class="mx-auto flex min-h-screen max-w-6xl items-center px-6 py-16">
+      <div class="grid w-full gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+        <div class="flex flex-col justify-center">
+          <p class="portal-eyebrow mb-3">Portal clientes</p>
+          <h1 class="mb-4 text-5xl font-semibold leading-tight">Acceso privado para clientes Technized</h1>
+          <p class="portal-copy max-w-xl text-lg">
+            Ingresa con tu cuenta para ver aplicaciones, herramientas y accesos asignados a tu
+            organizacion.
+          </p>
+        </div>
+
+        <div class="portal-panel portal-panel--warm rounded-[32px] p-8">
+          <div class="mb-8">
+            <p class="portal-eyebrow text-sm">Sign in</p>
+            <h2 class="mt-2 text-3xl font-semibold">Ingresar</h2>
+            <p class="portal-copy mt-2 text-sm">Usa las credenciales habilitadas para tu cliente.</p>
+          </div>
+
+          {error && (
+            <div class="mb-6 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              {error}
+            </div>
+          )}
+
+          <form action="/api/auth/login" method="POST" class="space-y-5">
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-white/80">Email</span>
+              <input
+                type="email"
+                name="email"
+                autocomplete="email"
+                required
+                class="portal-input w-full rounded-2xl px-4 py-3"
+                placeholder="cliente@empresa.com"
+              />
+            </label>
+
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-white/80">Contrasena</span>
+              <input
+                type="password"
+                name="password"
+                autocomplete="current-password"
+                required
+                class="portal-input w-full rounded-2xl px-4 py-3"
+                placeholder="********"
+              />
+            </label>
+
+            <button
+              type="submit"
+              class="portal-submit inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em]"
+            >
+              Ingresar
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

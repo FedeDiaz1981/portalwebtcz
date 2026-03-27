@@ -1,0 +1,58 @@
+---
+import PortalLayout from "../../layouts/PortalLayout.astro";
+import {
+  getAuthorizedApplications,
+  getCurrentPortalClient
+} from "../../lib/portal/client-access";
+
+const user = Astro.locals.user;
+const supabase = Astro.locals.supabase;
+
+if (!user || !supabase) {
+  return Astro.redirect("/login");
+}
+
+const currentClient = await getCurrentPortalClient(supabase, user.id);
+const applications = currentClient ? await getAuthorizedApplications(supabase, currentClient.id) : [];
+---
+
+<PortalLayout
+  title={`Aplicaciones Clientes | ${currentClient?.name ?? "Technized"}`}
+  description="Aplicaciones privadas habilitadas para clientes."
+  userEmail={user.email ?? ""}
+  activePath="/clientes/aplicaciones"
+  clientName={currentClient?.name ?? ""}
+  clientLogoUrl={currentClient?.logoUrl ?? ""}
+>
+  <section class="portal-panel rounded-[32px] p-8">
+    {!currentClient ? (
+      <div class="portal-notice mt-8 rounded-3xl p-6">
+        No encontramos un cliente activo asociado a esta cuenta. Cuando asignes la membresia en
+        Supabase, aca van a aparecer el logo y las aplicaciones del cliente.
+      </div>
+    ) : applications.length === 0 ? (
+      <div class="portal-empty-state mt-8 rounded-3xl p-6">
+        Este cliente todavia no tiene aplicaciones habilitadas.
+      </div>
+    ) : (
+      <div class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {applications.map((item) => (
+          <article class="portal-app-card rounded-3xl p-6">
+            <p class="portal-status text-xs uppercase tracking-[0.25em]">Disponible</p>
+            <h3 class="mt-3 text-2xl font-semibold">{item.name}</h3>
+            <p class="portal-copy mt-3 text-sm leading-7">
+              {item.description ?? "Aplicacion privada habilitada para este cliente."}
+            </p>
+
+            <a
+              href={item.url}
+              class="portal-action-link mt-6 inline-flex rounded-full px-4 py-2 text-sm font-medium"
+            >
+              Abrir aplicacion
+            </a>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+</PortalLayout>
